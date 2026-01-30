@@ -38,6 +38,12 @@ function App() {
   const [modalDetalleOpen, setModalDetalleOpen] = useState(false);
   const [modalFormOpen, setModalFormOpen] = useState(false);
   const [recetaEditar, setRecetaEditar] = useState<Receta | null>(null);
+
+  const [listo, setListo] = useState(false);
+
+    useEffect(() => {
+    setListo(true);
+  }, []);
   // Cargar recetas al iniciar
   useEffect(() => {
     cargarRecetas();
@@ -117,7 +123,7 @@ const estadisticas = {
   totalRecetas: recetas.length,
   gananciaTotal: recetas.reduce((acc, r) => acc + (r.gananciaTotal || 0), 0),
   costoTotal: recetas.reduce((acc, r) => acc + r.costoTotal, 0),
-  margenPromedio: recetas.length 
+  margenPromedio: recetas.length
     ? recetas.reduce((acc, r) => acc + r.margenGanancia, 0) / recetas.length 
     : 0,
   productoMasRentable: recetas.length > 0 
@@ -199,6 +205,8 @@ const estadisticas = {
     }
   };
   if (cargando) return <div className="p-8 text-center">Cargando...</div>;
+
+  if (!listo) return null;
 
   const renderVista = () => {
     switch (vistaActiva) {
