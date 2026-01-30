@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useRecetas } from '@/hooks/useRecetas';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import { EstadisticasDashboard } from '@/components/EstadisticasDashboard';
 import { BusquedaFiltros } from '@/components/BusquedaFiltros';
 import { RecetaCard } from '@/components/RecetaCard';
@@ -20,17 +20,16 @@ import type { Receta } from '@/types/receta';
 type Vista = 'dashboard' | 'catalogo' | 'calculadora';
 
 function App() {
-  const {
-    recetas,
-    recetasFiltradas,
-    busqueda,
-    setBusqueda,
-    categoriaActiva,
-    setCategoriaActiva,
-    estadisticas,
-    agregarReceta,
-    actualizarReceta,
-  } = useRecetas();
+// Estados de recetas (ahora desde Supabase)
+  const [recetas, setRecetas] = useState<Receta[]>([]);
+  const [recetasFiltradas, setRecetasFiltradas] = useState<Receta[]>([]);
+  const [cargando, setCargando] = useState(true);
+  
+  // Filtros
+  const [busqueda, setBusqueda] = useState('');
+  const [categoriaActiva, setCategoriaActiva] = useState('todas');
+  
+  // UI Modals
 
   const [vistaActiva, setVistaActiva] = useState<Vista>('dashboard');
   const [recetaSeleccionada, setRecetaSeleccionada] = useState<Receta | null>(
@@ -39,6 +38,95 @@ function App() {
   const [modalDetalleOpen, setModalDetalleOpen] = useState(false);
   const [modalFormOpen, setModalFormOpen] = useState(false);
   const [recetaEditar, setRecetaEditar] = useState<Receta | null>(null);
+  // Cargar recetas al iniciar
+  useEffect(() => {
+    cargarRecetas();
+  }, []);
+  // Función para cargar desde Supabase
+  const cargarRecetas = async () => {
+    setCargando(true);
+    try {
+      const { data, error } = await supabase
+        .from('recetas')
+        .select(`
+          *,
+          receta_ingredientes (
+            *,
+            ingredientes (*)
+          )
+        `)
+        .order('created_at', { ascending: false });
+      if (error) {
+        toast.error('Error al cargar recetas');
+      } else {
+        const formateadas = data?.map(item => ({
+          id: item.id,
+          nombre: item.nombre,
+          categoria: item.categoria_id,
+          ingredientes: item.receta_ingredientes?.map((ri: any) => ({
+            nombre: ri.ingredientes.nombre,
+            precioCompra: ri.ingredientes.precio_compra,
+            cantidadCompra: ri.ingredientes.cantidad_compra,
+            unidadCompra: ri.ingredientes.unidad_compra,
+            cantidadUsada: ri.cantidad_usada,
+            unidadUsada: ri.unidad_usada,
+            precioPorUnidad: ri.precio_por_unidad,
+            costoSegunUso: ri.costo_segundo_uso,
+          })) || [],
+          manoDeObra: {
+            precio: item.mano_obra_precio,
+            descripcion: item.mano_obra_descripcion || '',
+          },
+          numeroPorciones: item.numero_porciones,
+          precioVentaTotal: item.precio_venta_total,
+          costoTotal: item.costo_total,
+          costoPorPorcion: item.costo_por_porcion,
+          gananciaTotal: item.ganancia_total,
+          gananciaPorPorcion: item.ganancia_por_porcion || 0,
+          margenGanancia: item.margen_ganancia,
+          notas: item.notas || '',
+        })) || [];
+        setRecetas(formateadas);
+      }
+    } catch (err) {
+      toast.error('Error de conexión');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  // Filtros (useEffect que reemplaza la lógica del hook anterior)
+  useEffect(() => {
+    let filtradas = recetas;
+    
+    if (busqueda) {
+      filtradas = filtradas.filter(r => 
+        r.nombre.toLowerCase().includes(busqueda.toLowerCase())
+      );
+    }
+    
+    if (categoriaActiva !== 'todas') {
+      filtradas = filtradas.filter(r => r.categoria === categoriaActiva);
+    }
+    
+    setRecetasFiltradas(filtradas);
+  }, [recetas, busqueda, categoriaActiva]);
+
+  // Calcular estadísticas
+const estadisticas = {
+  totalRecetas: recetas.length,
+  gananciaTotal: recetas.reduce((acc, r) => acc + (r.gananciaTotal || 0), 0),
+  costoTotal: recetas.reduce((acc, r) => acc + r.costoTotal, 0),
+  margenPromedio: recetas.length 
+    ? recetas.reduce((acc, r) => acc + r.margenGanancia, 0) / recetas.length 
+    : 0,
+  productoMasRentable: recetas.length > 0 
+    ? (() => {
+        const r = recetas.reduce((p, c) => p.margenGanancia > c.margenGanancia ? p : c);
+        return { nombre: r.nombre, margenGanancia: r.margenGanancia };
+      })()
+    : { nombre: '-', margenGanancia: 0 }
+};
 
   const handleRecetaClick = (receta: Receta) => {
     setRecetaSeleccionada(receta);
@@ -50,15 +138,67 @@ function App() {
     setModalFormOpen(true);
   };
 
-  const handleGuardarReceta = (receta: Omit<Receta, 'id'>) => {
+  const handleGuardarReceta = async (receta: Omit<Receta, 'id'>) => {
     if (recetaEditar) {
-      actualizarReceta(recetaEditar.id, receta);
-      toast.success('Receta actualizada correctamente');
+      toast.info('Edición en desarrollo...');
     } else {
-      agregarReceta(receta);
-      toast.success('Receta creada correctamente');
+       // Guardar en Supabase
+      try {
+        const { data: recetaData, error: recetaError } = await supabase
+          .from('recetas')
+          .insert({
+            nombre: receta.nombre,
+            categoria_id: receta.categoria,
+            notas: receta.notas,
+            numero_porciones: receta.numeroPorciones,
+            precio_venta_total: receta.precioVentaTotal,
+            mano_obra_precio: receta.manoDeObra?.precio || 0,
+            mano_obra_descripcion: receta.manoDeObra?.descripcion,
+          })
+          .select()
+          .single();
+        if (recetaError) throw recetaError;
+        // Guardar ingredientes
+        for (const ing of receta.ingredientes) {
+          let ingredienteId;
+          const { data: existente } = await supabase
+            .from('ingredientes')
+            .select('id')
+            .eq('nombre', ing.nombre)
+            .single();
+          if (existente) {
+            ingredienteId = existente.id;
+          } else {
+            const { data: nuevo } = await supabase
+              .from('ingredientes')
+              .insert({
+                nombre: ing.nombre,
+                precio_compra: ing.precioCompra,
+                cantidad_compra: ing.cantidadCompra,
+                unidad_compra: ing.unidadCompra,
+              })
+              .select()
+              .single();
+            ingredienteId = nuevo!.id;
+          }
+          await supabase.from('receta_ingredientes').insert({
+            receta_id: recetaData.id,
+            ingrediente_id: ingredienteId,
+            cantidad_usada: ing.cantidadUsada,
+            unidad_usada: ing.unidadUsada,
+            precio_por_unidad: ing.precioPorUnidad,
+            costo_segundo_uso: ing.costoSegunUso,
+          });
+        }
+        toast.success('¡Receta guardada!');
+        await cargarRecetas();
+        setModalFormOpen(false);
+      } catch (err: any) {
+        toast.error('Error: ' + err.message);
+      }
     }
   };
+  if (cargando) return <div className="p-8 text-center">Cargando...</div>;
 
   const renderVista = () => {
     switch (vistaActiva) {
