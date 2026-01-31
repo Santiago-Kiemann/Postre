@@ -23,7 +23,7 @@ function App() {
   const [recetas, setRecetas] = useState<Receta[]>([]);
   const [recetasFiltradas, setRecetasFiltradas] = useState<Receta[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [listo, setListo] = useState(true); // Cambiado a true directamente
+  const listo = true; // Cambiado a true directamente
   
   const [busqueda, setBusqueda] = useState('');
   const [categoriaActiva, setCategoriaActiva] = useState('todas');
