@@ -426,7 +426,8 @@ export function RecetaFormModal({
             <div className="space-y-3 max-h-[400px] overflow-y-auto">
               {pasos.map((pasoTexto, index) => (
                 <div key={index} className="flex gap-2 items-start bg-amber-50 p-3 rounded-lg border border-amber-100">
-                  <div className="flex flex-col gap-1 mt-1">
+                  <div className="flex flex-col gap-1 mt-1 cursor-grab">
+                      <GripVertical className="w-4 h-4 text-gray-400 mx-auto mb-1" />
                     <span className="bg-amber-200 text-amber-800 text-xs font-bold px-2 py-1 rounded-full text-center min-w-[24px]">
                       {index + 1}
                     </span>
