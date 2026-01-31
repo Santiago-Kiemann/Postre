@@ -5,6 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
@@ -24,18 +25,22 @@ import {
   Package,
   Calculator,
   Info,
+  Edit3,
+  ListOrdered,
 } from 'lucide-react';
 
 interface RecetaDetalleModalProps {
   receta: Receta | null;
   open: boolean;
   onClose: () => void;
+  onEdit?: () => void; // NUEVO: para editar
 }
 
 export function RecetaDetalleModal({
   receta,
   open,
   onClose,
+  onEdit,
 }: RecetaDetalleModalProps) {
   if (!receta) return null;
 
@@ -51,7 +56,7 @@ export function RecetaDetalleModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose} modal={true}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-start justify-between">
@@ -69,14 +74,30 @@ export function RecetaDetalleModal({
                 <p className="text-gray-500 mt-2">{receta.notas}</p>
               )}
             </div>
-            <div className="bg-primary/10 p-3 rounded-full">
-              <ChefHat className="w-6 h-6 text-primary" />
+            <div className="flex items-center gap-2">
+              {onEdit && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onClose();
+                    onEdit();
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  Editar
+                </Button>
+              )}
+              <div className="bg-primary/10 p-3 rounded-full">
+                <ChefHat className="w-6 h-6 text-primary" />
+              </div>
             </div>
           </div>
         </DialogHeader>
 
         <Tabs defaultValue="costos" className="mt-4">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="costos" className="flex items-center gap-2">
               <Calculator className="w-4 h-4" />
               Costos
@@ -85,19 +106,24 @@ export function RecetaDetalleModal({
               <Package className="w-4 h-4" />
               Ingredientes
             </TabsTrigger>
+            <TabsTrigger value="preparacion" className="flex items-center gap-2">
+              <ListOrdered className="w-4 h-4" />
+              Preparación
+            </TabsTrigger>
             <TabsTrigger value="info" className="flex items-center gap-2">
               <Info className="w-4 h-4" />
-              Información
+              Info
             </TabsTrigger>
           </TabsList>
 
+          {/* Tab Costos (igual que antes) */}
           <TabsContent value="costos" className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
               <div className="bg-green-50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <TrendingUp className="w-4 h-4 text-green-600" />
                   <span className="text-sm text-green-700 font-medium">
-                    Margen de Ganancia
+                    Margen
                   </span>
                 </div>
                 <p className="text-2xl font-bold text-green-700">
@@ -148,7 +174,7 @@ export function RecetaDetalleModal({
               </h4>
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Costo de Ingredientes:</span>
+                  <span className="text-gray-600">Costo Ingredientes:</span>
                   <span className="font-medium">
                     ${(receta.costoTotal - receta.manoDeObra.precio).toFixed(2)}
                   </span>
@@ -170,16 +196,11 @@ export function RecetaDetalleModal({
                     ${receta.costoPorPorcion.toFixed(2)}
                   </span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Ganancia por Porción:</span>
-                  <span className="font-medium text-green-600">
-                    ${receta.gananciaPorPorcion.toFixed(2)}
-                  </span>
-                </div>
               </div>
             </div>
           </TabsContent>
 
+          {/* Tab Ingredientes (igual) */}
           <TabsContent value="ingredientes">
             <div className="mt-4">
               <Table>
@@ -223,6 +244,50 @@ export function RecetaDetalleModal({
             </div>
           </TabsContent>
 
+          {/* NUEVA TAB: Preparación */}
+          <TabsContent value="preparacion">
+            <div className="mt-4 space-y-4">
+              {receta.pasos && receta.pasos.length > 0 ? (
+                <div className="space-y-3">
+                  {receta.pasos.map((paso, index) => (
+                    <div 
+                      key={index} 
+                      className="flex gap-4 p-4 bg-amber-50 rounded-lg border border-amber-100"
+                    >
+                      <div className="flex-shrink-0">
+                        <span className="flex items-center justify-center w-8 h-8 bg-amber-200 text-amber-800 rounded-full font-bold text-sm">
+                          {index + 1}
+                        </span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-gray-800 leading-relaxed">{paso}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                  <ListOrdered className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                  <p>No hay pasos de preparación registrados</p>
+                  {onEdit && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => {
+                        onClose();
+                        onEdit();
+                      }}
+                      className="mt-3"
+                    >
+                      Agregar preparación
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Tab Info (igual) */}
           <TabsContent value="info">
             <div className="space-y-4 mt-4">
               <div className="bg-gray-50 rounded-lg p-4">
@@ -235,7 +300,7 @@ export function RecetaDetalleModal({
                     <p className="font-medium">{receta.categoria}</p>
                   </div>
                   <div>
-                    <span className="text-gray-500">Número de Porciones:</span>
+                    <span className="text-gray-500">Porciones:</span>
                     <p className="font-medium">{receta.numeroPorciones}</p>
                   </div>
                   <div>
@@ -257,21 +322,6 @@ export function RecetaDetalleModal({
                     Descripción de Mano de Obra
                   </h4>
                   <p className="text-blue-700">{receta.manoDeObra.descripcion}</p>
-                </div>
-              )}
-
-              {receta.pasos && receta.pasos.length > 0 && (
-                <div className="bg-amber-50 rounded-lg p-4">
-                  <h4 className="font-semibold text-amber-900 mb-2">
-                    Pasos de Preparación
-                  </h4>
-                  <ol className="list-decimal list-inside space-y-1">
-                    {receta.pasos.map((paso, index) => (
-                      <li key={index} className="text-amber-800">
-                        {paso}
-                      </li>
-                    ))}
-                  </ol>
                 </div>
               )}
             </div>

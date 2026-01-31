@@ -20,11 +20,10 @@ import type { Receta } from '@/types/receta';
 type Vista = 'dashboard' | 'catalogo' | 'calculadora';
 
 function App() {
-  // 1. TODOS los useState primero
   const [recetas, setRecetas] = useState<Receta[]>([]);
   const [recetasFiltradas, setRecetasFiltradas] = useState<Receta[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [listo, setListo] = useState(false); // Empieza en false para la animación de entrada
+  const [listo, setListo] = useState(false);
   
   const [busqueda, setBusqueda] = useState('');
   const [categoriaActiva, setCategoriaActiva] = useState('todas');
@@ -34,202 +33,11 @@ function App() {
   const [modalFormOpen, setModalFormOpen] = useState(false);
   const [recetaEditar, setRecetaEditar] = useState<Receta | null>(null);
 
-  // 2. TODOS los useEffect después de los useState
-  useEffect(() => {
-    // Pequeño delay para la animación de entrada
-    const timer = setTimeout(() => setListo(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    let cancelado = false;
-    
-    const cargarRecetas = async () => {
-      setCargando(true);
-      try {
-        const { data, error } = await supabase
-          .from('recetas')
-          .select(`
-            *,
-            receta_ingredientes (
-              *,
-              ingredientes (*)
-            )
-          `)
-          .order('created_at', { ascending: false });
-          
-        if (cancelado) return;
-        
-        if (error) {
-          toast.error('Error al cargar recetas');
-        } else {
-          const formateadas = data?.map(item => ({
-            id: item.id,
-            nombre: item.nombre,
-            categoria: item.categoria_id,
-            ingredientes: item.receta_ingredientes?.map((ri: any) => ({
-              nombre: ri.ingredientes.nombre,
-              precioCompra: ri.ingredientes.precio_compra,
-              cantidadCompra: ri.ingredientes.cantidad_compra,
-              unidadCompra: ri.ingredientes.unidad_compra,
-              cantidadUsada: ri.cantidad_usada,
-              unidadUsada: ri.unidad_usada,
-              precioPorUnidad: ri.precio_por_unidad,
-              costoSegunUso: ri.costo_segundo_uso,
-            })) || [],
-            manoDeObra: {
-              precio: item.mano_obra_precio,
-              descripcion: item.mano_obra_descripcion || '',
-            },
-            numeroPorciones: item.numero_porciones,
-            precioVentaTotal: item.precio_venta_total,
-            costoTotal: item.costo_total,
-            costoPorPorcion: item.costo_por_porcion,
-            gananciaTotal: item.ganancia_total,
-            gananciaPorPorcion: item.ganancia_por_porcion || 0,
-            margenGanancia: item.margen_ganancia,
-            notas: item.notas || '',
-          })) || [];
-          setRecetas(formateadas);
-        }
-      } catch (err) {
-        if (!cancelado) {
-          toast.error('Error de conexión');
-        }
-      } finally {
-        if (!cancelado) {
-          setCargando(false);
-        }
-      }
-    };
-    
-    cargarRecetas();
-    
-    return () => {
-      cancelado = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      let filtradas = recetas;
-      
-      if (busqueda) {
-        filtradas = filtradas.filter(r => 
-          r.nombre.toLowerCase().includes(busqueda.toLowerCase())
-        );
-      }
-      
-      if (categoriaActiva !== 'todas') {
-        filtradas = filtradas.filter(r => r.categoria === categoriaActiva);
-      }
-      
-      setRecetasFiltradas(filtradas);
-    }, 300);
-    
-    return () => clearTimeout(timeoutId);
-  }, [recetas, busqueda, categoriaActiva]);
-
-  // 3. LOS RETURNS CONDICIONALES AL FINAL (después de todos los hooks)
-  if (!listo) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (cargando) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        <p className="text-gray-600">Cargando recetas...</p>
-      </div>
-    );
-  }
-
-  // 4. EL RESTO DEL COMPONENTE (funciones y JSX)
-  const estadisticas = {
-    totalRecetas: recetas.length,
-    gananciaTotal: recetas.reduce((acc, r) => acc + (r.gananciaTotal || 0), 0),
-    costoTotal: recetas.reduce((acc, r) => acc + r.costoTotal, 0),
-    margenPromedio: recetas.length
-      ? recetas.reduce((acc, r) => acc + r.margenGanancia, 0) / recetas.length 
-      : 0,
-    productoMasRentable: recetas.length > 0 
-      ? (() => {
-          const r = recetas.reduce((p, c) => p.margenGanancia > c.margenGanancia ? p : c);
-          return { nombre: r.nombre, margenGanancia: r.margenGanancia };
-        })()
-      : { nombre: '-', margenGanancia: 0 }
-  };
-
-  const handleRecetaClick = (receta: Receta) => {
-    setRecetaSeleccionada(receta);
-    setModalDetalleOpen(true);
-  };
-
-  const handleNuevaReceta = () => {
-    setRecetaEditar(null);
-    setModalFormOpen(true);
-  };
-
-  const handleGuardarReceta = async (receta: Omit<Receta, 'id'>): Promise<void> => {
+  // ✅ MOVIDA FUERA: Función para cargar recetas (disponible globalmente en el componente)
+  const cargarRecetas = async () => {
+    setCargando(true);
     try {
-      const { data: recetaData, error: recetaError } = await supabase
-        .from('recetas')
-        .insert({
-          nombre: receta.nombre,
-          categoria_id: receta.categoria,
-          notas: receta.notas,
-          numero_porciones: receta.numeroPorciones,
-          precio_venta_total: receta.precioVentaTotal,
-          mano_obra_precio: receta.manoDeObra?.precio || 0,
-          mano_obra_descripcion: receta.manoDeObra?.descripcion,
-        })
-        .select()
-        .single();
-        
-      if (recetaError) throw recetaError;
-      
-      for (const ing of receta.ingredientes) {
-        let ingredienteId;
-        const { data: existente } = await supabase
-          .from('ingredientes')
-          .select('id')
-          .eq('nombre', ing.nombre)
-          .single();
-          
-        if (existente) {
-          ingredienteId = existente.id;
-        } else {
-          const { data: nuevo } = await supabase
-            .from('ingredientes')
-            .insert({
-              nombre: ing.nombre,
-              precio_compra: ing.precioCompra,
-              cantidad_compra: ing.cantidadCompra,
-              unidad_compra: ing.unidadCompra,
-            })
-            .select()
-            .single();
-          ingredienteId = nuevo!.id;
-        }
-        
-        await supabase.from('receta_ingredientes').insert({
-          receta_id: recetaData.id,
-          ingrediente_id: ingredienteId,
-          cantidad_usada: ing.cantidadUsada,
-          unidad_usada: ing.unidadUsada,
-          precio_por_unidad: ing.precioPorUnidad,
-          costo_segundo_uso: ing.costoSegunUso,
-        });
-      }
-      
-      toast.success('¡Receta guardada!');
-      
-      // Recargar recetas
-      const { data: nuevasRecetas } = await supabase
+      const { data, error } = await supabase
         .from('recetas')
         .select(`
           *,
@@ -240,8 +48,10 @@ function App() {
         `)
         .order('created_at', { ascending: false });
         
-      if (nuevasRecetas) {
-        const formateadas = nuevasRecetas.map((item: any) => ({
+      if (error) {
+        toast.error('Error al cargar recetas');
+      } else {
+        const formateadas = data?.map(item => ({
           id: item.id,
           nombre: item.nombre,
           categoria: item.categoria_id,
@@ -267,11 +77,223 @@ function App() {
           gananciaPorPorcion: item.ganancia_por_porcion || 0,
           margenGanancia: item.margen_ganancia,
           notas: item.notas || '',
-        }));
+          pasos: item.pasos || [],
+        })) || [];
         setRecetas(formateadas);
       }
+    } catch (err) {
+      toast.error('Error de conexión');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  // useEffect inicial
+  useEffect(() => {
+    const timer = setTimeout(() => setListo(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // useEffect para cargar datos al inicio
+  useEffect(() => {
+    cargarRecetas(); // ✅ Ahora sí puede llamarse aquí
+  }, []);
+
+  // Filtros con debounce
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      let filtradas = recetas;
       
+      if (busqueda) {
+        filtradas = filtradas.filter(r => 
+          r.nombre.toLowerCase().includes(busqueda.toLowerCase())
+        );
+      }
+      
+      if (categoriaActiva !== 'todas') {
+        filtradas = filtradas.filter(r => r.categoria === categoriaActiva);
+      }
+      
+      setRecetasFiltradas(filtradas);
+    }, 300);
+    
+    return () => clearTimeout(timeoutId);
+  }, [recetas, busqueda, categoriaActiva]);
+
+  if (!listo) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (cargando && recetas.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <p className="text-gray-600">Cargando recetas...</p>
+      </div>
+    );
+  }
+
+  const estadisticas = {
+    totalRecetas: recetas.length,
+    gananciaTotal: recetas.reduce((acc, r) => acc + (r.gananciaTotal || 0), 0),
+    costoTotal: recetas.reduce((acc, r) => acc + r.costoTotal, 0),
+    margenPromedio: recetas.length
+      ? recetas.reduce((acc, r) => acc + r.margenGanancia, 0) / recetas.length 
+      : 0,
+    productoMasRentable: recetas.length > 0 
+      ? (() => {
+          const r = recetas.reduce((p, c) => p.margenGanancia > c.margenGanancia ? p : c);
+          return { nombre: r.nombre, margenGanancia: r.margenGanancia };
+        })()
+      : { nombre: '-', margenGanancia: 0 }
+  };
+
+  const handleRecetaClick = (receta: Receta) => {
+    setRecetaSeleccionada(receta);
+    setModalDetalleOpen(true);
+  };
+
+  const handleNuevaReceta = () => {
+    setRecetaEditar(null);
+    setModalFormOpen(true);
+  };
+
+  const handleGuardarReceta = async (receta: Omit<Receta, 'id'>, id?: string): Promise<void> => {
+    try {
+      if (id) {
+        // EDICIÓN
+        const { error: updateError } = await supabase
+          .from('recetas')
+          .update({
+            nombre: receta.nombre,
+            categoria_id: receta.categoria,
+            notas: receta.notas,
+            numero_porciones: receta.numeroPorciones,
+            precio_venta_total: receta.precioVentaTotal,
+            mano_obra_precio: receta.manoDeObra?.precio || 0,
+            mano_obra_descripcion: receta.manoDeObra?.descripcion,
+            costo_total: receta.costoTotal,
+            costo_por_porcion: receta.costoPorPorcion,
+            ganancia_total: receta.gananciaTotal,
+            ganancia_por_porcion: receta.gananciaPorPorcion,
+            margen_ganancia: receta.margenGanancia,
+            pasos: receta.pasos || [],
+          })
+          .eq('id', id);
+
+        if (updateError) throw updateError;
+
+        // Borrar ingredientes antiguos
+        await supabase
+          .from('receta_ingredientes')
+          .delete()
+          .eq('receta_id', id);
+
+        // Insertar ingredientes nuevos
+        for (const ing of receta.ingredientes) {
+          let ingredienteId;
+          const { data: existente } = await supabase
+            .from('ingredientes')
+            .select('id')
+            .eq('nombre', ing.nombre)
+            .single();
+
+          if (existente) {
+            ingredienteId = existente.id;
+          } else {
+            const { data: nuevo } = await supabase
+              .from('ingredientes')
+              .insert({
+                nombre: ing.nombre,
+                precio_compra: ing.precioCompra,
+                cantidad_compra: ing.cantidadCompra,
+                unidad_compra: ing.unidadCompra,
+              })
+              .select()
+              .single();
+            ingredienteId = nuevo!.id;
+          }
+
+          await supabase.from('receta_ingredientes').insert({
+            receta_id: id,
+            ingrediente_id: ingredienteId,
+            cantidad_usada: ing.cantidadUsada,
+            unidad_usada: ing.unidadUsada,
+            precio_por_unidad: ing.precioPorUnidad,
+            costo_segundo_uso: ing.costoSegunUso,
+          });
+        }
+
+        toast.success('✏️ Receta actualizada correctamente');
+      } else {
+        // CREACIÓN
+        const { data: recetaData, error: recetaError } = await supabase
+          .from('recetas')
+          .insert({
+            nombre: receta.nombre,
+            categoria_id: receta.categoria,
+            notas: receta.notas,
+            numero_porciones: receta.numeroPorciones,
+            precio_venta_total: receta.precioVentaTotal,
+            mano_obra_precio: receta.manoDeObra?.precio || 0,
+            mano_obra_descripcion: receta.manoDeObra?.descripcion,
+            costo_total: receta.costoTotal,
+            costo_por_porcion: receta.costoPorPorcion,
+            ganancia_total: receta.gananciaTotal,
+            ganancia_por_porcion: receta.gananciaPorPorcion,
+            margen_ganancia: receta.margenGanancia,
+            pasos: receta.pasos || [],
+          })
+          .select()
+          .single();
+
+        if (recetaError) throw recetaError;
+
+        for (const ing of receta.ingredientes) {
+          let ingredienteId;
+          const { data: existente } = await supabase
+            .from('ingredientes')
+            .select('id')
+            .eq('nombre', ing.nombre)
+            .single();
+
+          if (existente) {
+            ingredienteId = existente.id;
+          } else {
+            const { data: nuevo } = await supabase
+              .from('ingredientes')
+              .insert({
+                nombre: ing.nombre,
+                precio_compra: ing.precioCompra,
+                cantidad_compra: ing.cantidadCompra,
+                unidad_compra: ing.unidadCompra,
+              })
+              .select()
+              .single();
+            ingredienteId = nuevo!.id;
+          }
+
+          await supabase.from('receta_ingredientes').insert({
+            receta_id: recetaData.id,
+            ingrediente_id: ingredienteId,
+            cantidad_usada: ing.cantidadUsada,
+            unidad_usada: ing.unidadUsada,
+            precio_por_unidad: ing.precioPorUnidad,
+            costo_segundo_uso: ing.costoSegunUso,
+          });
+        }
+
+        toast.success('✨ Nueva receta creada');
+      }
+
+      // ✅ AHORA SÍ FUNCIONA: Recargar recetas después de guardar
+      await cargarRecetas();
       setModalFormOpen(false);
+      setRecetaEditar(null);
     } catch (err: any) {
       toast.error('Error: ' + err.message);
     }
@@ -370,6 +392,7 @@ function App() {
             </div>
           </div>
         );
+
       default:
         return null;
     }
@@ -432,12 +455,29 @@ function App() {
         {renderVista()}
       </main>
 
-      <RecetaDetalleModal receta={recetaSeleccionada} open={modalDetalleOpen} onClose={() => setModalDetalleOpen(false)} />
-      <RecetaFormModal open={modalFormOpen} onClose={() => setModalFormOpen(false)} onSave={handleGuardarReceta} recetaEditar={recetaEditar} />
+      <RecetaDetalleModal 
+        receta={recetaSeleccionada} 
+        open={modalDetalleOpen} 
+        onClose={() => setModalDetalleOpen(false)}
+        onEdit={() => {
+          setRecetaEditar(recetaSeleccionada);
+          setModalFormOpen(true);
+        }}
+      />
+
+      <RecetaFormModal 
+        open={modalFormOpen} 
+        onClose={() => {
+          setModalFormOpen(false);
+          setRecetaEditar(null);
+        }} 
+        onSave={handleGuardarReceta} 
+        recetaEditar={recetaEditar}
+      />
+
       <Toaster position="top-right" />
     </div>
   );
 }
-
 
 export default App;

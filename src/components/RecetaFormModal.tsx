@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -17,13 +18,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Trash2, Calculator, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Calculator, Loader2, GripVertical, ArrowUp, ArrowDown } from 'lucide-react';
 import { categorias } from '@/data/recetas';
 
 interface RecetaFormModalProps {
   open: boolean;
   onClose: () => void;
-  onSave: (receta: Omit<Receta, 'id'>) => Promise<void>; // Ahora devuelve Promise
+  onSave: (receta: Omit<Receta, 'id'>, id?: string) => Promise<void>; // id opcional para edición
   recetaEditar?: Receta | null;
 }
 
@@ -48,58 +49,92 @@ export function RecetaFormModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isMounted = useRef(true);
 
-  // Cleanup cuando se desmonta
   useEffect(() => {
     isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-    };
+    return () => { isMounted.current = false; };
   }, []);
 
-  const [ingredientes, setIngredientes] = useState<IngredienteForm[]>(
-    recetaEditar
-      ? recetaEditar.ingredientes.map((ing) => ({
-          nombre: ing.nombre,
-          precioCompra: ing.precioCompra.toString(),
-          cantidadCompra: ing.cantidadCompra.toString(),
-          unidadCompra: ing.unidadCompra,
-          cantidadUsada: ing.cantidadUsada.toString(),
-          unidadUsada: ing.unidadUsada,
-        }))
-      : [
-          {
-            nombre: '',
-            precioCompra: '',
-            cantidadCompra: '',
-            unidadCompra: 'g',
-            cantidadUsada: '',
-            unidadUsada: 'g',
-          },
-        ]
-  );
+  // Estados del formulario
+  const [ingredientes, setIngredientes] = useState<IngredienteForm[]>([
+    { nombre: '', precioCompra: '', cantidadCompra: '', unidadCompra: 'g', cantidadUsada: '', unidadUsada: 'g' }
+  ]);
 
+  const [pasos, setPasos] = useState<string[]>(['']);
+  
   const [datosBasicos, setDatosBasicos] = useState({
-    nombre: recetaEditar?.nombre || '',
-    categoria: recetaEditar?.categoria || 'Postres',
-    notas: recetaEditar?.notas || '',
-    numeroPorciones: recetaEditar?.numeroPorciones.toString() || '',
-    precioVentaTotal: recetaEditar?.precioVentaTotal.toString() || '',
-    manoDeObra: recetaEditar?.manoDeObra.precio.toString() || '',
+    nombre: '',
+    categoria: 'Postres',
+    notas: '',
+    numeroPorciones: '',
+    precioVentaTotal: '',
+    manoDeObra: '',
   });
 
+  // Cargar datos si es edición
+  useEffect(() => {
+    if (recetaEditar) {
+      setDatosBasicos({
+        nombre: recetaEditar.nombre || '',
+        categoria: recetaEditar.categoria || 'Postres',
+        notas: recetaEditar.notas || '',
+        numeroPorciones: recetaEditar.numeroPorciones?.toString() || '',
+        precioVentaTotal: recetaEditar.precioVentaTotal?.toString() || '',
+        manoDeObra: recetaEditar.manoDeObra?.precio?.toString() || '',
+      });
+      
+      setIngredientes(recetaEditar.ingredientes?.map((ing) => ({
+        nombre: ing.nombre,
+        precioCompra: ing.precioCompra.toString(),
+        cantidadCompra: ing.cantidadCompra.toString(),
+        unidadCompra: ing.unidadCompra,
+        cantidadUsada: ing.cantidadUsada.toString(),
+        unidadUsada: ing.unidadUsada,
+      })) || [{ nombre: '', precioCompra: '', cantidadCompra: '', unidadCompra: 'g', cantidadUsada: '', unidadUsada: 'g' }]);
+      
+      setPasos(recetaEditar.pasos?.length ? recetaEditar.pasos : ['']);
+    } else {
+      // Reset si es nueva
+      setDatosBasicos({
+        nombre: '', categoria: 'Postres', notas: '', numeroPorciones: '', precioVentaTotal: '', manoDeObra: ''
+      });
+      setIngredientes([{ nombre: '', precioCompra: '', cantidadCompra: '', unidadCompra: 'g', cantidadUsada: '', unidadUsada: 'g' }]);
+      setPasos(['']);
+    }
+  }, [recetaEditar, open]);
+
+  // Funciones para pasos/preparación
+  const agregarPaso = () => {
+    setPasos([...pasos, '']);
+  };
+
+  const actualizarPaso = (index: number, valor: string) => {
+    const nuevos = [...pasos];
+    nuevos[index] = valor;
+    setPasos(nuevos);
+  };
+
+  const eliminarPaso = (index: number) => {
+    if (pasos.length > 1) {
+      setPasos(pasos.filter((_, i) => i !== index));
+    }
+  };
+
+  const moverPaso = (index: number, direccion: 'up' | 'down') => {
+    if (direccion === 'up' && index > 0) {
+      const nuevos = [...pasos];
+      [nuevos[index], nuevos[index - 1]] = [nuevos[index - 1], nuevos[index]];
+      setPasos(nuevos);
+    } else if (direccion === 'down' && index < pasos.length - 1) {
+      const nuevos = [...pasos];
+      [nuevos[index], nuevos[index + 1]] = [nuevos[index + 1], nuevos[index]];
+      setPasos(nuevos);
+    }
+  };
+
+  // Funciones para ingredientes (tuyas actuales)
   const agregarIngrediente = () => {
     if (isSubmitting) return;
-    setIngredientes([
-      ...ingredientes,
-      {
-        nombre: '',
-        precioCompra: '',
-        cantidadCompra: '',
-        unidadCompra: 'g',
-        cantidadUsada: '',
-        unidadUsada: 'g',
-      },
-    ]);
+    setIngredientes([...ingredientes, { nombre: '', precioCompra: '', cantidadCompra: '', unidadCompra: 'g', cantidadUsada: '', unidadUsada: 'g' }]);
   };
 
   const eliminarIngrediente = (index: number) => {
@@ -107,11 +142,7 @@ export function RecetaFormModal({
     setIngredientes(ingredientes.filter((_, i) => i !== index));
   };
 
-  const actualizarIngrediente = (
-    index: number,
-    campo: keyof IngredienteForm,
-    valor: string
-  ) => {
+  const actualizarIngrediente = (index: number, campo: keyof IngredienteForm, valor: string) => {
     if (isSubmitting) return;
     const nuevos = [...ingredientes];
     nuevos[index][campo] = valor;
@@ -138,10 +169,7 @@ export function RecetaFormModal({
       };
     });
 
-    const costoIngredientes = ingredientesCalc.reduce(
-      (sum, ing) => sum + ing.costoSegunUso,
-      0
-    );
+    const costoIngredientes = ingredientesCalc.reduce((sum, ing) => sum + ing.costoSegunUso, 0);
     const manoDeObraPrecio = parseFloat(datosBasicos.manoDeObra) || 0;
     const costoTotal = costoIngredientes + manoDeObraPrecio;
     const numeroPorciones = parseFloat(datosBasicos.numeroPorciones) || 1;
@@ -149,8 +177,7 @@ export function RecetaFormModal({
     const costoPorPorcion = costoTotal / numeroPorciones;
     const gananciaTotal = precioVentaTotal - costoTotal;
     const gananciaPorPorcion = gananciaTotal / numeroPorciones;
-    const margenGanancia =
-      precioVentaTotal > 0 ? (gananciaTotal / precioVentaTotal) * 100 : 0;
+    const margenGanancia = precioVentaTotal > 0 ? (gananciaTotal / precioVentaTotal) * 100 : 0;
 
     return {
       ingredientes: ingredientesCalc,
@@ -164,11 +191,12 @@ export function RecetaFormModal({
 
   const handleGuardar = async () => {
     if (isSubmitting) return;
-    
     setIsSubmitting(true);
-    
+
     try {
       const costos = calcularCostos();
+      // Filtrar pasos vacíos
+      const pasosLimpios = pasos.filter(p => p.trim() !== '');
 
       const receta: Omit<Receta, 'id'> = {
         nombre: datosBasicos.nombre,
@@ -185,17 +213,17 @@ export function RecetaFormModal({
         gananciaTotal: costos.gananciaTotal,
         gananciaPorPorcion: costos.gananciaPorPorcion,
         margenGanancia: costos.margenGanancia,
+        pasos: pasosLimpios,
       };
 
-      await onSave(receta);
+      // Si es edición, pasamos el id
+      await onSave(receta, recetaEditar?.id);
       
-      // Solo cerrar si el componente sigue montado
       if (isMounted.current) {
         onClose();
       }
     } catch (error) {
       console.error('Error al guardar:', error);
-      // El error ya se muestra en App.tsx con toast
     } finally {
       if (isMounted.current) {
         setIsSubmitting(false);
@@ -205,353 +233,255 @@ export function RecetaFormModal({
 
   const costosPreview = calcularCostos();
 
-  const handleOpenChange = (open: boolean) => {
-    if (!open && isSubmitting) {
-      const confirmar = window.confirm('¿Cancelar el guardado? Los cambios se perderán.');
-      if (!confirmar) return;
-    }
-    if (!open && !isSubmitting) {
-      onClose();
-    }
-  };
-
-  const cambiarPaso = (nuevoPaso: number) => {
-    if (isSubmitting) return;
-    setPaso(nuevoPaso);
-  };
-
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={(open) => !open && !isSubmitting && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">
-            {recetaEditar ? 'Editar Receta' : 'Nueva Receta'}
+            {recetaEditar ? '✏️ Editar Receta' : '➕ Nueva Receta'}
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs value={`paso${paso}`} onValueChange={(v) => cambiarPaso(parseInt(v.replace('paso', '')))}>
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs value={`paso${paso}`} onValueChange={(v) => setPaso(parseInt(v.replace('paso', '')))}>
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="paso1" disabled={isSubmitting}>Datos Básicos</TabsTrigger>
             <TabsTrigger value="paso2" disabled={isSubmitting}>Ingredientes</TabsTrigger>
             <TabsTrigger value="paso3" disabled={isSubmitting} className="flex items-center gap-2">
               <Calculator className="w-4 h-4" />
-              Resumen
+              Costos
             </TabsTrigger>
+            <TabsTrigger value="paso4" disabled={isSubmitting}>👨‍🍳 Preparación</TabsTrigger>
           </TabsList>
 
+          {/* Paso 1: Datos básicos (igual que antes) */}
           <TabsContent value="paso1" className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <Label htmlFor="nombre">Nombre de la Receta *</Label>
+                <Label>Nombre de la Receta *</Label>
                 <Input
-                  id="nombre"
                   value={datosBasicos.nombre}
-                  onChange={(e) =>
-                    setDatosBasicos({ ...datosBasicos, nombre: e.target.value })
-                  }
+                  onChange={(e) => setDatosBasicos({ ...datosBasicos, nombre: e.target.value })}
                   placeholder="Ej: Chocoflan Especial"
                   disabled={isSubmitting}
                 />
               </div>
-
               <div>
-                <Label htmlFor="categoria">Categoría *</Label>
+                <Label>Categoría *</Label>
                 <Select
                   value={datosBasicos.categoria}
-                  onValueChange={(v) =>
-                    setDatosBasicos({ ...datosBasicos, categoria: v })
-                  }
+                  onValueChange={(v) => setDatosBasicos({ ...datosBasicos, categoria: v })}
                   disabled={isSubmitting}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {categorias
-                      .filter((c) => c.id !== 'todas')
-                      .map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.nombre}
-                        </SelectItem>
-                      ))}
+                    {categorias.filter((c) => c.id !== 'todas').map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>{cat.nombre}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-
               <div>
-                <Label htmlFor="porciones">Número de Porciones *</Label>
+                <Label>Número de Porciones *</Label>
                 <Input
-                  id="porciones"
                   type="number"
                   value={datosBasicos.numeroPorciones}
-                  onChange={(e) =>
-                    setDatosBasicos({
-                      ...datosBasicos,
-                      numeroPorciones: e.target.value,
-                    })
-                  }
+                  onChange={(e) => setDatosBasicos({ ...datosBasicos, numeroPorciones: e.target.value })}
                   placeholder="Ej: 8"
                   disabled={isSubmitting}
                 />
               </div>
-
               <div>
-                <Label htmlFor="precioVenta">Precio de Venta Total ($) *</Label>
+                <Label>Precio de Venta Total ($) *</Label>
                 <Input
-                  id="precioVenta"
                   type="number"
                   step="0.01"
                   value={datosBasicos.precioVentaTotal}
-                  onChange={(e) =>
-                    setDatosBasicos({
-                      ...datosBasicos,
-                      precioVentaTotal: e.target.value,
-                    })
-                  }
+                  onChange={(e) => setDatosBasicos({ ...datosBasicos, precioVentaTotal: e.target.value })}
                   placeholder="Ej: 24.00"
                   disabled={isSubmitting}
                 />
               </div>
-
               <div>
-                <Label htmlFor="manoDeObra">Mano de Obra ($) *</Label>
+                <Label>Mano de Obra ($) *</Label>
                 <Input
-                  id="manoDeObra"
                   type="number"
                   step="0.01"
                   value={datosBasicos.manoDeObra}
-                  onChange={(e) =>
-                    setDatosBasicos({
-                      ...datosBasicos,
-                      manoDeObra: e.target.value,
-                    })
-                  }
+                  onChange={(e) => setDatosBasicos({ ...datosBasicos, manoDeObra: e.target.value })}
                   placeholder="Ej: 3.00"
                   disabled={isSubmitting}
                 />
               </div>
-
               <div className="col-span-2">
-                <Label htmlFor="notas">Notas / Descripción</Label>
+                <Label>Notas / Descripción</Label>
                 <Input
-                  id="notas"
                   value={datosBasicos.notas}
-                  onChange={(e) =>
-                    setDatosBasicos({ ...datosBasicos, notas: e.target.value })
-                  }
+                  onChange={(e) => setDatosBasicos({ ...datosBasicos, notas: e.target.value })}
                   placeholder="Descripción breve de la receta"
                   disabled={isSubmitting}
                 />
               </div>
             </div>
-
             <div className="flex justify-end">
-              <Button onClick={() => cambiarPaso(2)} disabled={isSubmitting}>Siguiente</Button>
+              <Button onClick={() => setPaso(2)} disabled={isSubmitting}>Siguiente</Button>
             </div>
           </TabsContent>
 
+          {/* Paso 2: Ingredientes (tu código actual) */}
           <TabsContent value="paso2" className="space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="font-semibold">Ingredientes</h3>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={agregarIngrediente}
-                disabled={isSubmitting}
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                Agregar
+              <Button type="button" variant="outline" size="sm" onClick={agregarIngrediente} disabled={isSubmitting}>
+                <Plus className="w-4 h-4 mr-1" /> Agregar
               </Button>
             </div>
-
             <div className="space-y-3 max-h-[400px] overflow-y-auto">
               {ingredientes.map((ing, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-12 gap-2 items-end bg-gray-50 p-3 rounded-lg"
-                >
+                <div key={index} className="grid grid-cols-12 gap-2 items-end bg-gray-50 p-3 rounded-lg">
                   <div className="col-span-3">
                     <Label className="text-xs">Nombre</Label>
-                    <Input
-                      value={ing.nombre}
-                      onChange={(e) =>
-                        actualizarIngrediente(index, 'nombre', e.target.value)
-                      }
-                      placeholder="Ej: Huevos"
-                      className="h-9"
-                      disabled={isSubmitting}
-                    />
+                    <Input value={ing.nombre} onChange={(e) => actualizarIngrediente(index, 'nombre', e.target.value)} placeholder="Ej: Huevos" className="h-9" disabled={isSubmitting} />
                   </div>
                   <div className="col-span-2">
                     <Label className="text-xs">Precio ($)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={ing.precioCompra}
-                      onChange={(e) =>
-                        actualizarIngrediente(
-                          index,
-                          'precioCompra',
-                          e.target.value
-                        )
-                      }
-                      placeholder="0.00"
-                      className="h-9"
-                      disabled={isSubmitting}
-                    />
+                    <Input type="number" step="0.01" value={ing.precioCompra} onChange={(e) => actualizarIngrediente(index, 'precioCompra', e.target.value)} placeholder="0.00" className="h-9" disabled={isSubmitting} />
                   </div>
                   <div className="col-span-2">
                     <Label className="text-xs">Cant. Compra</Label>
-                    <Input
-                      type="number"
-                      value={ing.cantidadCompra}
-                      onChange={(e) =>
-                        actualizarIngrediente(
-                          index,
-                          'cantidadCompra',
-                          e.target.value
-                        )
-                      }
-                      placeholder="0"
-                      className="h-9"
-                      disabled={isSubmitting}
-                    />
+                    <Input type="number" value={ing.cantidadCompra} onChange={(e) => actualizarIngrediente(index, 'cantidadCompra', e.target.value)} placeholder="0" className="h-9" disabled={isSubmitting} />
                   </div>
                   <div className="col-span-1">
                     <Label className="text-xs">Unid.</Label>
-                    <Select
-                      value={ing.unidadCompra}
-                      onValueChange={(v) =>
-                        actualizarIngrediente(index, 'unidadCompra', v)
-                      }
-                      disabled={isSubmitting}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {UNIDADES.map((u) => (
-                          <SelectItem key={u} value={u}>
-                            {u}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
+                    <Select value={ing.unidadCompra} onValueChange={(v) => actualizarIngrediente(index, 'unidadCompra', v)} disabled={isSubmitting}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>{UNIDADES.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="col-span-2">
                     <Label className="text-xs">Cant. Usada</Label>
-                    <Input
-                      type="number"
-                      value={ing.cantidadUsada}
-                      onChange={(e) =>
-                        actualizarIngrediente(
-                          index,
-                          'cantidadUsada',
-                          e.target.value
-                        )
-                      }
-                      placeholder="0"
-                      className="h-9"
-                      disabled={isSubmitting}
-                    />
+                    <Input type="number" value={ing.cantidadUsada} onChange={(e) => actualizarIngrediente(index, 'cantidadUsada', e.target.value)} placeholder="0" className="h-9" disabled={isSubmitting} />
                   </div>
                   <div className="col-span-1">
                     <Label className="text-xs">Unid.</Label>
-                    <Select
-                      value={ing.unidadUsada}
-                      onValueChange={(v) =>
-                        actualizarIngrediente(index, 'unidadUsada', v)
-                      }
-                      disabled={isSubmitting}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {UNIDADES.map((u) => (
-                          <SelectItem key={u} value={u}>
-                            {u}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
+                    <Select value={ing.unidadUsada} onValueChange={(v) => actualizarIngrediente(index, 'unidadUsada', v)} disabled={isSubmitting}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>{UNIDADES.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="col-span-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => eliminarIngrediente(index)}
-                      disabled={isSubmitting || ingredientes.length === 1}
-                      className="h-9 w-9 p-0"
-                    >
+                    <Button type="button" variant="ghost" size="sm" onClick={() => eliminarIngrediente(index)} disabled={isSubmitting || ingredientes.length === 1} className="h-9 w-9 p-0">
                       <Trash2 className="w-4 h-4 text-red-500" />
                     </Button>
                   </div>
                 </div>
               ))}
             </div>
-
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => cambiarPaso(1)} disabled={isSubmitting}>
-                Anterior
-              </Button>
-              <Button onClick={() => cambiarPaso(3)} disabled={isSubmitting}>Siguiente</Button>
+              <Button variant="outline" onClick={() => setPaso(1)} disabled={isSubmitting}>Anterior</Button>
+              <Button onClick={() => setPaso(3)} disabled={isSubmitting}>Siguiente</Button>
             </div>
           </TabsContent>
 
+          {/* Paso 3: Resumen (tu código actual) */}
           <TabsContent value="paso3" className="space-y-4">
             <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-900 mb-4">
-                Resumen de Costos
-              </h3>
-
+              <h3 className="font-semibold text-gray-900 mb-4">Resumen de Costos</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 <div className="bg-white rounded-lg p-3 shadow-sm">
                   <p className="text-xs text-gray-500">Costo Total</p>
-                  <p className="text-xl font-bold text-gray-900">
-                    ${costosPreview.costoTotal.toFixed(2)}
-                  </p>
+                  <p className="text-xl font-bold text-gray-900">${costosPreview.costoTotal.toFixed(2)}</p>
                 </div>
                 <div className="bg-white rounded-lg p-3 shadow-sm">
                   <p className="text-xs text-gray-500">Costo por Porción</p>
-                  <p className="text-xl font-bold text-gray-900">
-                    ${costosPreview.costoPorPorcion.toFixed(2)}
-                  </p>
+                  <p className="text-xl font-bold text-gray-900">${costosPreview.costoPorPorcion.toFixed(2)}</p>
                 </div>
                 <div className="bg-green-50 rounded-lg p-3 shadow-sm border border-green-100">
                   <p className="text-xs text-green-600">Ganancia Total</p>
-                  <p className="text-xl font-bold text-green-700">
-                    ${costosPreview.gananciaTotal.toFixed(2)}
-                  </p>
+                  <p className="text-xl font-bold text-green-700">${costosPreview.gananciaTotal.toFixed(2)}</p>
                 </div>
                 <div className="bg-blue-50 rounded-lg p-3 shadow-sm border border-blue-100">
                   <p className="text-xs text-blue-600">Margen</p>
-                  <p className="text-xl font-bold text-blue-700">
-                    {costosPreview.margenGanancia.toFixed(1)}%
-                  </p>
+                  <p className="text-xl font-bold text-blue-700">{costosPreview.margenGanancia.toFixed(1)}%</p>
                 </div>
               </div>
+            </div>
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setPaso(2)} disabled={isSubmitting}>Anterior</Button>
+              <Button onClick={() => setPaso(4)} disabled={isSubmitting}>Siguiente: Preparación</Button>
+            </div>
+          </TabsContent>
 
-              <div className="bg-white rounded-lg p-3 shadow-sm">
-                <p className="text-sm text-gray-600">
-                  <span className="font-medium">Ingredientes:</span>{' '}
-                  {ingredientes.filter((i) => i.nombre).length} registrados
-                </p>
-                <p className="text-sm text-gray-600">
-                  <span className="font-medium">Precio de Venta:</span> ${' '}
-                  {datosBasicos.precioVentaTotal || '0.00'}
-                </p>
-                <p className="text-sm text-gray-600">
-                  <span className="font-medium">Porciones:</span>{' '}
-                  {datosBasicos.numeroPorciones || '0'}
-                </p>
+          {/* PASO 4 NUEVO: Preparación */}
+          <TabsContent value="paso4" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="font-semibold text-lg">Pasos de Preparación</h3>
+                <p className="text-sm text-gray-500">Describe paso a paso cómo preparar la receta</p>
               </div>
+              <Button type="button" variant="outline" size="sm" onClick={agregarPaso} disabled={isSubmitting}>
+                <Plus className="w-4 h-4 mr-1" /> Agregar Paso
+              </Button>
+            </div>
+
+            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+              {pasos.map((pasoTexto, index) => (
+                <div key={index} className="flex gap-2 items-start bg-amber-50 p-3 rounded-lg border border-amber-100">
+                  <div className="flex flex-col gap-1 mt-1">
+                    <span className="bg-amber-200 text-amber-800 text-xs font-bold px-2 py-1 rounded-full text-center min-w-[24px]">
+                      {index + 1}
+                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => moverPaso(index, 'up')}
+                        disabled={index === 0 || isSubmitting}
+                      >
+                        <ArrowUp className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => moverPaso(index, 'down')}
+                        disabled={index === pasos.length - 1 || isSubmitting}
+                      >
+                        <ArrowDown className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <Textarea
+                      value={pasoTexto}
+                      onChange={(e) => actualizarPaso(index, e.target.value)}
+                      placeholder={`Paso ${index + 1}: Describe qué hacer...`}
+                      className="min-h-[80px] bg-white"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => eliminarPaso(index)}
+                    disabled={pasos.length === 1 || isSubmitting}
+                    className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-700">
+              <strong>💡 Consejo:</strong> Sé específico en los pasos. Incluye temperaturas del horno, tiempos de cocción, y tips importantes.
             </div>
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => cambiarPaso(2)} disabled={isSubmitting}>
+              <Button variant="outline" onClick={() => setPaso(3)} disabled={isSubmitting}>
                 Anterior
               </Button>
               <Button
@@ -562,7 +492,7 @@ export function RecetaFormModal({
                   !datosBasicos.numeroPorciones ||
                   !datosBasicos.precioVentaTotal
                 }
-                className="bg-green-600 hover:bg-green-700 min-w-[140px]"
+                className="bg-green-600 hover:bg-green-700 min-w-[160px]"
               >
                 {isSubmitting ? (
                   <span className="flex items-center gap-2">
@@ -570,7 +500,7 @@ export function RecetaFormModal({
                     Guardando...
                   </span>
                 ) : (
-                  recetaEditar ? 'Guardar Cambios' : 'Crear Receta'
+                  recetaEditar ? '💾 Guardar Cambios' : '✨ Crear Receta'
                 )}
               </Button>
             </div>
