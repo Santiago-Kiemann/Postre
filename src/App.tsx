@@ -20,27 +20,29 @@ import type { Receta } from '@/types/receta';
 type Vista = 'dashboard' | 'catalogo' | 'calculadora';
 
 function App() {
+  // 1. TODOS los useState primero
   const [recetas, setRecetas] = useState<Receta[]>([]);
   const [recetasFiltradas, setRecetasFiltradas] = useState<Receta[]>([]);
   const [cargando, setCargando] = useState(true);
-  const listo = true; // Cambiado a true directamente
+  const [listo, setListo] = useState(false); // Empieza en false para la animación de entrada
   
   const [busqueda, setBusqueda] = useState('');
   const [categoriaActiva, setCategoriaActiva] = useState('todas');
-  
   const [vistaActiva, setVistaActiva] = useState<Vista>('dashboard');
   const [recetaSeleccionada, setRecetaSeleccionada] = useState<Receta | null>(null);
   const [modalDetalleOpen, setModalDetalleOpen] = useState(false);
   const [modalFormOpen, setModalFormOpen] = useState(false);
   const [recetaEditar, setRecetaEditar] = useState<Receta | null>(null);
 
-  // Orden CORREGIDO: primero listo, luego cargando
-  if (!listo) return null;
-  if (cargando) return <div className="p-8 text-center">Cargando...</div>;
-
-  // Cargar recetas al iniciar
+  // 2. TODOS los useEffect después de los useState
   useEffect(() => {
-    let cancelado = false; // Bandera para evitar actualizar si se desmonta
+    // Pequeño delay para la animación de entrada
+    const timer = setTimeout(() => setListo(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    let cancelado = false;
     
     const cargarRecetas = async () => {
       setCargando(true);
@@ -56,7 +58,7 @@ function App() {
           `)
           .order('created_at', { ascending: false });
           
-        if (cancelado) return; // Si se desmontó, no actualizar estado
+        if (cancelado) return;
         
         if (error) {
           toast.error('Error al cargar recetas');
@@ -103,13 +105,11 @@ function App() {
     
     cargarRecetas();
     
-    // Cleanup: marca como cancelado si el componente se desmonta
     return () => {
       cancelado = true;
     };
   }, []);
 
-  // Filtros con debounce (optimización)
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       let filtradas = recetas;
@@ -130,6 +130,25 @@ function App() {
     return () => clearTimeout(timeoutId);
   }, [recetas, busqueda, categoriaActiva]);
 
+  // 3. LOS RETURNS CONDICIONALES AL FINAL (después de todos los hooks)
+  if (!listo) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (cargando) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <p className="text-gray-600">Cargando recetas...</p>
+      </div>
+    );
+  }
+
+  // 4. EL RESTO DEL COMPONENTE (funciones y JSX)
   const estadisticas = {
     totalRecetas: recetas.length,
     gananciaTotal: recetas.reduce((acc, r) => acc + (r.gananciaTotal || 0), 0),
@@ -173,7 +192,6 @@ function App() {
         
       if (recetaError) throw recetaError;
       
-      // Guardar ingredientes
       for (const ing of receta.ingredientes) {
         let ingredienteId;
         const { data: existente } = await supabase
@@ -420,5 +438,6 @@ function App() {
     </div>
   );
 }
+
 
 export default App;
