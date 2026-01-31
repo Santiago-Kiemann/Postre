@@ -39,74 +39,56 @@ function App() {
   const [modalFormOpen, setModalFormOpen] = useState(false);
   const [recetaEditar, setRecetaEditar] = useState<Receta | null>(null);
 
-  const [listo, setListo] = useState(false);
+const [listo, setListo] = useState(true);
 
-    useEffect(() => {
-    setListo(true);
-  }, []);
+
   // Cargar recetas al iniciar
   useEffect(() => {
     cargarRecetas();
   }, []);
   // Función para cargar desde Supabase
-  const cargarRecetas = async () => {
-    setCargando(true);
-    try {
-      const { data, error } = await supabase
-        .from('recetas')
-        .select(`
+
+  //❌ Línea 48-85 de App.tsx - Reemplaza la función cargarRecetas por:
+
+const cargarRecetas = async () => {
+  setCargando(true);
+  const abortController = new AbortController();
+  
+  try {
+    const { data, error } = await supabase
+      .from('recetas')
+      .select(`
+        *,
+        receta_ingredientes (
           *,
-          receta_ingredientes (
-            *,
-            ingredientes (*)
-          )
-        `)
-        .order('created_at', { ascending: false });
-      if (error) {
-        toast.error('Error al cargar recetas');
-      } else {
-        const formateadas = data?.map(item => ({
-          id: item.id,
-          nombre: item.nombre,
-          categoria: item.categoria_id,
-          ingredientes: item.receta_ingredientes?.map((ri: any) => ({
-            nombre: ri.ingredientes.nombre,
-            precioCompra: ri.ingredientes.precio_compra,
-            cantidadCompra: ri.ingredientes.cantidad_compra,
-            unidadCompra: ri.ingredientes.unidad_compra,
-            cantidadUsada: ri.cantidad_usada,
-            unidadUsada: ri.unidad_usada,
-            precioPorUnidad: ri.precio_por_unidad,
-            costoSegunUso: ri.costo_segundo_uso,
-          })) || [],
-          manoDeObra: {
-            precio: item.mano_obra_precio,
-            descripcion: item.mano_obra_descripcion || '',
-          },
-          numeroPorciones: item.numero_porciones,
-          precioVentaTotal: item.precio_venta_total,
-          costoTotal: item.costo_total,
-          costoPorPorcion: item.costo_por_porcion,
-          gananciaTotal: item.ganancia_total,
-          gananciaPorPorcion: item.ganancia_por_porcion || 0,
-          margenGanancia: item.margen_ganancia,
-          notas: item.notas || '',
-        })) || [];
-        setRecetas(formateadas);
-      }
-    } catch (err) {
+          ingredientes (*)
+        )
+      `)
+      .order('created_at', { ascending: false })
+      .abortSignal(abortController.signal); // Importante para cancelar
+    
+    if (error) throw error;
+    
+    // Tu lógica de formateo actual...
+    const formateadas = data?.map(item => ({...})) || [];
+    setRecetas(formateadas);
+  } catch (err: any) {
+    if (err.name !== 'AbortError') {
       toast.error('Error de conexión');
-    } finally {
-      setCargando(false);
     }
-  };
+  } finally {
+    setCargando(false);
+  }
+  
+  return () => abortController.abort(); // Cleanup
+};
 
   // Filtros (useEffect que reemplaza la lógica del hook anterior)
   useEffect(() => {
     let filtradas = recetas;
     
     if (busqueda) {
-      filtradas = filtradas.filter(r => 
+      filtradas = filtradas.filter(r =>
         r.nombre.toLowerCase().includes(busqueda.toLowerCase())
       );
     }
@@ -124,9 +106,9 @@ const estadisticas = {
   gananciaTotal: recetas.reduce((acc, r) => acc + (r.gananciaTotal || 0), 0),
   costoTotal: recetas.reduce((acc, r) => acc + r.costoTotal, 0),
   margenPromedio: recetas.length
-    ? recetas.reduce((acc, r) => acc + r.margenGanancia, 0) / recetas.length 
-    : 0,
-  productoMasRentable: recetas.length > 0 
+    ? recetas.reduce((acc, r) => acc + r.margenGanancia, 0) / recetas.length
+        : 0,
+  productoMasRentable: recetas.length > 0
     ? (() => {
         const r = recetas.reduce((p, c) => p.margenGanancia > c.margenGanancia ? p : c);
         return { nombre: r.nombre, margenGanancia: r.margenGanancia };
@@ -144,7 +126,7 @@ const estadisticas = {
     setModalFormOpen(true);
   };
 
-  const handleGuardarReceta = async (receta: Omit<Receta, 'id'>) => {
+  const handleGuardarReceta = async (receta: Omit<Receta, 'id'>): Promise<void> => {
     if (recetaEditar) {
       toast.info('Edición en desarrollo...');
     } else {
@@ -204,9 +186,9 @@ const estadisticas = {
       }
     }
   };
-  if (cargando) return <div className="p-8 text-center">Cargando...</div>;
+if (!listo) return null;
 
-  if (!listo) return null;
+if (cargando) return <div className="p-8 text-center">Cargando...</div>;
 
   const renderVista = () => {
     switch (vistaActiva) {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { Receta, Ingrediente, CategoriaReceta } from '@/types/receta';
 import {
   Dialog,
@@ -17,13 +17,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Trash2, Calculator } from 'lucide-react';
+import { Plus, Trash2, Calculator, Loader2 } from 'lucide-react';
 import { categorias } from '@/data/recetas';
 
 interface RecetaFormModalProps {
   open: boolean;
   onClose: () => void;
-  onSave: (receta: Omit<Receta, 'id'>) => void;
+  onSave: (receta: Omit<Receta, 'id'>) => Promise<void>; // Ahora devuelve Promise
   recetaEditar?: Receta | null;
 }
 
@@ -45,6 +45,17 @@ export function RecetaFormModal({
   recetaEditar,
 }: RecetaFormModalProps) {
   const [paso, setPaso] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isMounted = useRef(true);
+
+  // Cleanup cuando se desmonta
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   const [ingredientes, setIngredientes] = useState<IngredienteForm[]>(
     recetaEditar
       ? recetaEditar.ingredientes.map((ing) => ({
@@ -77,6 +88,7 @@ export function RecetaFormModal({
   });
 
   const agregarIngrediente = () => {
+    if (isSubmitting) return;
     setIngredientes([
       ...ingredientes,
       {
@@ -91,9 +103,8 @@ export function RecetaFormModal({
   };
 
   const eliminarIngrediente = (index: number) => {
-    if (ingredientes.length > 1) {
-      setIngredientes(ingredientes.filter((_, i) => i !== index));
-    }
+    if (isSubmitting || ingredientes.length <= 1) return;
+    setIngredientes(ingredientes.filter((_, i) => i !== index));
   };
 
   const actualizarIngrediente = (
@@ -101,6 +112,7 @@ export function RecetaFormModal({
     campo: keyof IngredienteForm,
     valor: string
   ) => {
+    if (isSubmitting) return;
     const nuevos = [...ingredientes];
     nuevos[index][campo] = valor;
     setIngredientes(nuevos);
@@ -150,34 +162,66 @@ export function RecetaFormModal({
     };
   };
 
-  const handleGuardar = () => {
-    const costos = calcularCostos();
+  const handleGuardar = async () => {
+    if (isSubmitting) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      const costos = calcularCostos();
 
-    const receta: Omit<Receta, 'id'> = {
-      nombre: datosBasicos.nombre,
-      categoria: datosBasicos.categoria as CategoriaReceta,
-      notas: datosBasicos.notas,
-      numeroPorciones: parseFloat(datosBasicos.numeroPorciones) || 1,
-      precioVentaTotal: parseFloat(datosBasicos.precioVentaTotal) || 0,
-      manoDeObra: {
-        precio: parseFloat(datosBasicos.manoDeObra) || 0,
-      },
-      ingredientes: costos.ingredientes,
-      costoTotal: costos.costoTotal,
-      costoPorPorcion: costos.costoPorPorcion,
-      gananciaTotal: costos.gananciaTotal,
-      gananciaPorPorcion: costos.gananciaPorPorcion,
-      margenGanancia: costos.margenGanancia,
-    };
+      const receta: Omit<Receta, 'id'> = {
+        nombre: datosBasicos.nombre,
+        categoria: datosBasicos.categoria as CategoriaReceta,
+        notas: datosBasicos.notas,
+        numeroPorciones: parseFloat(datosBasicos.numeroPorciones) || 1,
+        precioVentaTotal: parseFloat(datosBasicos.precioVentaTotal) || 0,
+        manoDeObra: {
+          precio: parseFloat(datosBasicos.manoDeObra) || 0,
+        },
+        ingredientes: costos.ingredientes,
+        costoTotal: costos.costoTotal,
+        costoPorPorcion: costos.costoPorPorcion,
+        gananciaTotal: costos.gananciaTotal,
+        gananciaPorPorcion: costos.gananciaPorPorcion,
+        margenGanancia: costos.margenGanancia,
+      };
 
-    onSave(receta);
-    onClose();
+      await onSave(receta);
+      
+      // Solo cerrar si el componente sigue montado
+      if (isMounted.current) {
+        onClose();
+      }
+    } catch (error) {
+      console.error('Error al guardar:', error);
+      // El error ya se muestra en App.tsx con toast
+    } finally {
+      if (isMounted.current) {
+        setIsSubmitting(false);
+      }
+    }
   };
 
   const costosPreview = calcularCostos();
 
+  const handleOpenChange = (open: boolean) => {
+    if (!open && isSubmitting) {
+      const confirmar = window.confirm('¿Cancelar el guardado? Los cambios se perderán.');
+      if (!confirmar) return;
+    }
+    if (!open && !isSubmitting) {
+      onClose();
+    }
+  };
+
+  const cambiarPaso = (nuevoPaso: number) => {
+    if (isSubmitting) return;
+    setPaso(nuevoPaso);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onClose} modal={true}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">
@@ -185,11 +229,11 @@ export function RecetaFormModal({
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs value={`paso${paso}`} onValueChange={(v) => setPaso(parseInt(v.replace('paso', '')))}>
+        <Tabs value={`paso${paso}`} onValueChange={(v) => cambiarPaso(parseInt(v.replace('paso', '')))}>
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="paso1">Datos Básicos</TabsTrigger>
-            <TabsTrigger value="paso2">Ingredientes</TabsTrigger>
-            <TabsTrigger value="paso3" className="flex items-center gap-2">
+            <TabsTrigger value="paso1" disabled={isSubmitting}>Datos Básicos</TabsTrigger>
+            <TabsTrigger value="paso2" disabled={isSubmitting}>Ingredientes</TabsTrigger>
+            <TabsTrigger value="paso3" disabled={isSubmitting} className="flex items-center gap-2">
               <Calculator className="w-4 h-4" />
               Resumen
             </TabsTrigger>
@@ -206,6 +250,7 @@ export function RecetaFormModal({
                     setDatosBasicos({ ...datosBasicos, nombre: e.target.value })
                   }
                   placeholder="Ej: Chocoflan Especial"
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -216,6 +261,7 @@ export function RecetaFormModal({
                   onValueChange={(v) =>
                     setDatosBasicos({ ...datosBasicos, categoria: v })
                   }
+                  disabled={isSubmitting}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -245,6 +291,7 @@ export function RecetaFormModal({
                     })
                   }
                   placeholder="Ej: 8"
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -262,6 +309,7 @@ export function RecetaFormModal({
                     })
                   }
                   placeholder="Ej: 24.00"
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -279,6 +327,7 @@ export function RecetaFormModal({
                     })
                   }
                   placeholder="Ej: 3.00"
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -291,12 +340,13 @@ export function RecetaFormModal({
                     setDatosBasicos({ ...datosBasicos, notas: e.target.value })
                   }
                   placeholder="Descripción breve de la receta"
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
 
             <div className="flex justify-end">
-              <Button onClick={() => setPaso(2)}>Siguiente</Button>
+              <Button onClick={() => cambiarPaso(2)} disabled={isSubmitting}>Siguiente</Button>
             </div>
           </TabsContent>
 
@@ -308,6 +358,7 @@ export function RecetaFormModal({
                 variant="outline"
                 size="sm"
                 onClick={agregarIngrediente}
+                disabled={isSubmitting}
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Agregar
@@ -329,6 +380,7 @@ export function RecetaFormModal({
                       }
                       placeholder="Ej: Huevos"
                       className="h-9"
+                      disabled={isSubmitting}
                     />
                   </div>
                   <div className="col-span-2">
@@ -346,6 +398,7 @@ export function RecetaFormModal({
                       }
                       placeholder="0.00"
                       className="h-9"
+                      disabled={isSubmitting}
                     />
                   </div>
                   <div className="col-span-2">
@@ -362,6 +415,7 @@ export function RecetaFormModal({
                       }
                       placeholder="0"
                       className="h-9"
+                      disabled={isSubmitting}
                     />
                   </div>
                   <div className="col-span-1">
@@ -371,6 +425,7 @@ export function RecetaFormModal({
                       onValueChange={(v) =>
                         actualizarIngrediente(index, 'unidadCompra', v)
                       }
+                      disabled={isSubmitting}
                     >
                       <SelectTrigger className="h-9">
                         <SelectValue />
@@ -398,6 +453,7 @@ export function RecetaFormModal({
                       }
                       placeholder="0"
                       className="h-9"
+                      disabled={isSubmitting}
                     />
                   </div>
                   <div className="col-span-1">
@@ -407,6 +463,7 @@ export function RecetaFormModal({
                       onValueChange={(v) =>
                         actualizarIngrediente(index, 'unidadUsada', v)
                       }
+                      disabled={isSubmitting}
                     >
                       <SelectTrigger className="h-9">
                         <SelectValue />
@@ -426,7 +483,7 @@ export function RecetaFormModal({
                       variant="ghost"
                       size="sm"
                       onClick={() => eliminarIngrediente(index)}
-                      disabled={ingredientes.length === 1}
+                      disabled={isSubmitting || ingredientes.length === 1}
                       className="h-9 w-9 p-0"
                     >
                       <Trash2 className="w-4 h-4 text-red-500" />
@@ -437,10 +494,10 @@ export function RecetaFormModal({
             </div>
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setPaso(1)}>
+              <Button variant="outline" onClick={() => cambiarPaso(1)} disabled={isSubmitting}>
                 Anterior
               </Button>
-              <Button onClick={() => setPaso(3)}>Siguiente</Button>
+              <Button onClick={() => cambiarPaso(3)} disabled={isSubmitting}>Siguiente</Button>
             </div>
           </TabsContent>
 
@@ -494,19 +551,27 @@ export function RecetaFormModal({
             </div>
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setPaso(2)}>
+              <Button variant="outline" onClick={() => cambiarPaso(2)} disabled={isSubmitting}>
                 Anterior
               </Button>
               <Button
                 onClick={handleGuardar}
                 disabled={
+                  isSubmitting ||
                   !datosBasicos.nombre ||
                   !datosBasicos.numeroPorciones ||
                   !datosBasicos.precioVentaTotal
                 }
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-green-600 hover:bg-green-700 min-w-[140px]"
               >
-                {recetaEditar ? 'Guardar Cambios' : 'Crear Receta'}
+                {isSubmitting ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Guardando...
+                  </span>
+                ) : (
+                  recetaEditar ? 'Guardar Cambios' : 'Crear Receta'
+                )}
               </Button>
             </div>
           </TabsContent>
