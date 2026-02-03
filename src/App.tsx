@@ -298,7 +298,43 @@ function App() {
       toast.error('Error: ' + err.message);
     }
   };
-
+const handleEliminarReceta = async (id: string) => {
+  const confirmar = window.confirm('¿Seguro que quieres eliminar esta receta permanentemente?');
+  if (!confirmar) return;
+  
+  try {
+    // 1. Borrar ingredientes relacionados primero (por integridad referencial)
+    const { error: errorIng } = await supabase
+      .from('receta_ingredientes')
+      .delete()
+      .eq('receta_id', id);
+      
+    if (errorIng) throw errorIng;
+    
+    // 2. Borrar la receta
+    const { error } = await supabase
+      .from('recetas')
+      .delete()
+      .eq('id', id);
+      
+    if (error) throw error;
+    
+    toast.success('🗑️ Receta eliminada correctamente');
+    
+    // Actualizar lista
+    await cargarRecetas();
+    
+    // Si estaba seleccionada, limpiar
+    if (recetaSeleccionada?.id === id) {
+      setRecetaSeleccionada(null);
+      setModalDetalleOpen(false);
+    }
+    
+  } catch (err: any) {
+    console.error('Error al eliminar:', err);
+    toast.error('❌ Error al eliminar: ' + err.message);
+  }
+};
   const renderVista = () => {
     switch (vistaActiva) {
       case 'dashboard':
@@ -316,7 +352,12 @@ function App() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {recetas.slice(0, 3).map((receta) => (
-                  <RecetaCard key={receta.id} receta={receta} onClick={() => handleRecetaClick(receta)} />
+                  <RecetaCard 
+                    key={receta.id} 
+                    receta={receta} 
+                    onClick={() => handleRecetaClick(receta)}
+                    onEliminar={() => handleEliminarReceta(receta.id)}
+                  />
                 ))}
               </div>
             </div>
@@ -340,7 +381,12 @@ function App() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {recetasFiltradas.map((receta) => (
-                <RecetaCard key={receta.id} receta={receta} onClick={() => handleRecetaClick(receta)} />
+                <RecetaCard 
+                  key={receta.id} 
+                  receta={receta} 
+                  onClick={() => handleRecetaClick(receta)}
+                  onEliminar={() => handleEliminarReceta(receta.id)}
+                />
               ))}
             </div>
             {recetasFiltradas.length === 0 && (
