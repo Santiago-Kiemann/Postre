@@ -526,4 +526,5 @@ const handleEliminarReceta = async (id: string) => {
   );
 }
 
+
 export default App;
