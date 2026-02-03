@@ -34,8 +34,7 @@ export function RecetaCard({ receta, onClick, onEliminar }: RecetaCardProps) {
               e.stopPropagation(); // Evitar que se abra el modal al hacer click
               onEliminar();
             }}
-            className="absolute top-2 right-2 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all z-10"
-            title="Eliminar receta"
+          className="absolute top-2 right-2 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full z-10"            title="Eliminar receta"
           >
             <Trash2 className="w-4 h-4" />
           </button>
